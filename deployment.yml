@@ -1,0 +1,200 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Release.Name }}-auth
+data:
+  userpass: {{ .Values.secret.userpass | b64enc }}
+  username: {{ .Values.secret.username | b64enc }}
+  rootpass: {{ .Values.secret.rootpass | b64enc }}
+  dbname:   {{ .Values.secret.dbname | b64enc }}
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.DB.mysqlpodname }}
+spec:
+  selector:
+    matchLabels:
+      app: mysql
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - image:  {{ .Values.DB.image }}:{{ .Values.DB.tag }}
+        name: {{ .Values.DB.name }}
+        env:
+        - name: "MYSQL_USER"
+          valueFrom:
+            secretKeyRef:
+              key:  username
+              name: {{ .Release.Name }}-auth
+        - name: "MYSQL_PASSWORD"
+          valueFrom:
+            secretKeyRef:
+              key:  userpass
+              name: {{ .Release.Name }}-auth
+        - name: "MYSQL_ROOT_PASSWORD"
+          valueFrom:
+            secretKeyRef:
+              key:  rootpass
+              name: {{ .Release.Name }}-auth
+        - name: "MYSQL_DATABASE"
+          valueFrom:
+            secretKeyRef:
+              key: dbname
+              name: {{ .Release.Name }}-auth
+
+        ports:
+        - name: {{ .Values.DB.portname }}
+          containerPort: {{ .Values.DB.dbport }}
+        volumeMounts:
+          - name: mysql-storage
+            mountPath: /var/lib/mysql
+      volumes:
+      - name: mysql-storage
+        hostPath:
+      # directory location on host
+          path: /data
+      # this field is optional
+          type: DirectoryOrCreate
+
+---
+
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.DB.servicename }}
+  labels:
+    app: mysql
+spec:
+  ports:
+  - port: {{ .Values.DB.port }}
+    protocol: {{ .Values.DB.protocol }}
+  selector:
+    app: mysql
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.backend.podname }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Values.backend.app }}
+  replicas: {{ .Values.backend.replicas }}
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: {{ .Values.backend.containername }}
+          image: {{ .Values.backend.url }}:{{ .Values.backend.tag }}
+          imagePullPolicy: {{ .Values.backend.imagePullPolicy }}
+          ports:
+            - name: {{ .Values.backend.portname }}
+              containerPort: {{ .Values.backend.Portid }}
+---
+
+
+apiVersion: v1
+kind: Service
+metadata:
+ name: {{ .Values.backend.servicename }}
+spec:
+ type: ClusterIP
+ selector:
+  app: {{ .Values.backend.app }}
+ ports:
+ - protocol: {{ .Values.backend.protocolname }}
+   port: {{ .Values.backend.portsvc }}
+
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.frontend.podname }}
+  labels:
+    app: {{ .Values.frontend.app }}
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+  replicas: {{ .Values.frontend.replicas }}
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - image: {{ .Values.frontend.image }}
+          name: {{ .Values.frontend.containername }}
+          ports:
+            - name: {{ .Values.frontend.portname }}
+              containerPort: {{ .Values.frontend.containerPort }}
+          resources:
+            limits:
+              cpu: 300m
+            requests:
+              cpu: 200m
+          volumeMounts:
+            - name: chatapp
+              mountPath: /etc/nginx/conf.d/
+              readOnly: true
+      volumes:
+        - name: chatapp
+          configMap:
+            name: chatapp-conf
+
+
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.frontend.configmapname }}
+data:
+  nginxconf.conf: |
+                  server{
+                  listen 80;
+                  location / {
+                  proxy_pass http://backend-service:8000;
+                   }
+                  }
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.frontend.servicename }}
+  labels:
+    app: nginx
+spec:
+  ports:
+  - port: {{ .Values.frontend.serviceport }}
+    protocol: {{ .Values.frontend.serviceprotocol }}
+  selector:
+    app: nginx
+
+
+---
+
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: {{ .Values.frontend.ingressname }}
+spec:
+  backend:
+    serviceName: {{ .Values.frontend.frontendservicename }}
+    servicePort: {{ .Values.frontend.loadport }}
