@@ -1,0 +1,54 @@
+secret:
+ userpass: shiv123456
+ username: shiv
+ rootpass: shiv123456
+ dbname:   shiv
+
+DB:
+ mysqlpodname: mysql
+ image: mysql
+ tag: 8.0
+ name: mydb
+ portname: tcp
+ dbport: 3306
+
+
+ servicename: mydb
+  #labels:
+  #app: mysql
+ port: 3306
+ protocol: TCP
+
+
+backend:
+
+ podname: backend
+ app: backend
+ replicas: 1
+ containername: backend
+ url: 635725186920.dkr.ecr.ap-south-1.amazonaws.com/eks_backend_image
+ tag:   latest
+ imagePullPolicy: Always
+ portname: tcp
+ Portid: 8000
+ servicename: backend-service
+ app: backend
+protocolname: TCP
+ portsvc :  8000
+
+
+frontend:
+  podname: frontend-deployment
+  app: frontend
+  replicas: 1
+  image: nginx
+  containername: frontend
+  portname: http
+  containerPort: 80
+  configmapname: chatapp-conf
+  servicename: frontend
+  serviceport: 80
+  serviceprotocol: TCP
+  ingressname: basic-ingress
+  frontendservicename: frontend
+  loadport: 80
